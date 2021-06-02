@@ -306,11 +306,20 @@ namespace RTCMClient
             Stop();
         }
 
-        private async Task<bool> Start()
+        private async Task<bool> OpenDevices()
         {
             if (CheckInput())
             {
                 SaveConfig();
+
+                tcpClient = new TcpClientHelper(IpAddress, Port, (data, dataLen) => { DoWithNetMsg(data, dataLen); });
+                tcpClient.Open();
+                await Task.Delay(1200);
+                if (!tcpClient.IsConnet)
+                {
+                    MessageBox.Show("网络连接超时，请检查配置或物理连接。", "发送错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return false;
+                }
 
                 jieShouJi = new SerialPortHelper(JieShouJiCOM, JieShouJiBaudrate, true, (data) =>
                 {
@@ -324,15 +333,6 @@ namespace RTCMClient
                 dianTai.OpenSerialPort();
                 if (!dianTai.IsPortOpen)
                     return false;
-
-                tcpClient = new TcpClientHelper(IpAddress, Port, (data, dataLen) => { DoWithNetMsg(data, dataLen); });
-                tcpClient.Start();
-                await Task.Delay(1000);
-                if (!tcpClient.IsConnet)
-                {
-                    MessageBox.Show("网络连接失败，请检查相关配置或者网络连接!", "发生错误", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return false;
-                }
 
                 return true;
             }
@@ -432,6 +432,12 @@ namespace RTCMClient
 
         private void Stop()
         {
+            EditEnable = true;
+            Status = "White";
+            this.ChangeBtn.IsEnabled = false;
+            StartBtnContent = StartTag;
+            ChangeBtnContent = ChangeTag;
+
             ErrorMsg = "";
             isUseNetChaFen = false;
             if (tcpClient != null)
@@ -516,12 +522,15 @@ namespace RTCMClient
             {
                 this.StartBtn.IsEnabled = false;//因为网口连接需要等待，可能连接不成功，为了避免用户在连接等待期间多次点击先禁用
                 logger.Info("开始启动");
-                if (!await Start())
+                if (!await OpenDevices())
                 {
                     this.StartBtn.IsEnabled = true;
                     Stop();
                     return;
                 }
+                tcpClient.Start();
+                jieShouJi.Start();
+                dianTai.Start();
                 this.StartBtn.IsEnabled = true;
                 StartBtnContent = StopTag;
                 EditEnable = false;
@@ -530,10 +539,6 @@ namespace RTCMClient
             else
             {
                 logger.Info("开始停止");
-                EditEnable = true;
-                this.ChangeBtn.IsEnabled = false;
-                StartBtnContent = StartTag;
-                ChangeBtnContent = ChangeTag;
                 Stop();
             }
         }
@@ -561,7 +566,7 @@ namespace RTCMClient
             int j = 0;
             foreach (var byteData in data)
             {
-                if (j++ == len - 1)
+                if (j++ == len)
                 {
                     break;
                 }

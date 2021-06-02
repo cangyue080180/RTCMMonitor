@@ -20,7 +20,7 @@ namespace RTCMClient.helper
 
         public string PortName { get; private set; }
         public bool IsPortOpen => serialPort1.IsOpen;
-        private CancellationTokenSource cts = new CancellationTokenSource();
+        private CancellationTokenSource cts;
 
         public SerialPortHelper(string com, int baudRate, bool receData = false, Action<string> doWithRec = null)
         {
@@ -39,10 +39,10 @@ namespace RTCMClient.helper
             }
         }
 
-        public void StartRecvMsg()
+        private void StartRecvMsg()
         {
             logger.Info($"{PortName} 开始接收消息");
-
+            cts = new CancellationTokenSource();
             Task.Run(() =>
             {
                 while (true)
@@ -63,8 +63,17 @@ namespace RTCMClient.helper
 
         public void StopRecvMsg()
         {
-            cts.Cancel();
+            if (cts != null)
+                cts.Cancel();
             logger.Info($"{PortName} 停止接收消息");
+        }
+
+        public void Start()
+        {
+            if (doAfterGetPacket != null)
+            {
+                StartRecvMsg();
+            }
         }
 
         public void OpenSerialPort()
@@ -75,11 +84,6 @@ namespace RTCMClient.helper
                 {
                     this.serialPort1.Open();
                     portClosing = false;
-
-                    if (doAfterGetPacket != null)
-                    {
-                        StartRecvMsg();
-                    }
                 }
 
                 //监听串口状态，尝试断线重连

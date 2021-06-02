@@ -1,5 +1,6 @@
 ﻿using log4net;
 using System;
+using System.Diagnostics;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,6 +29,22 @@ namespace RTCMClient.helper
             doAfterGetPacket = action;
         }
 
+        public async void Open()
+        {
+            tcpClient = new TcpClient();
+            var task1 = tcpClient.ConnectAsync(ipAddress, port);//给1s的连接时间，超过时间则超时,认为连接失败
+            var task2 = Task.Delay(1000);
+            var tasks = new Task[] { task1, task2 };
+            var result = await Task.WhenAny(tasks);
+            if (!tcpClient.Connected)
+            {
+                IsConnet = false;
+                return;
+            }
+            IsConnet = true;
+            logger.Info("网络连接成功");
+        }
+
         private DateTime lastPacketTime = DateTime.Now;
         private readonly byte[] buffer = new byte[2000];
         private int dateLen = 0;
@@ -35,19 +52,9 @@ namespace RTCMClient.helper
         public void Start()
         {
             cts = new CancellationTokenSource();
+
             try
             {
-                tcpClient = new TcpClient();
-                var task1 = tcpClient.ConnectAsync(ipAddress, port);//给1s的连接时间，超过时间则超时,认为连接失败
-                var task2 = Task.Delay(1000);
-                var tasks = new Task[] { task1, task2 };
-                var result = Task.WhenAny(tasks);
-                if (!tcpClient.Connected)
-                {
-                    IsConnet = false;
-                    return;
-                }
-                logger.Info("网络连接成功");
                 networkStream = tcpClient.GetStream();
                 _ = Task.Run(async () =>
                   {
@@ -56,16 +63,28 @@ namespace RTCMClient.helper
                           lastPacketTime = DateTime.Now;
                           cts.Token.ThrowIfCancellationRequested();
                           int receDataLen = await networkStream.ReadAsync(buffer, dateLen, 1024);
+                          dateLen += receDataLen;
+                          logger.Debug($"recv net len: {receDataLen},dataLen {dateLen}");
                           if (DateTime.Now.Subtract(lastPacketTime).TotalMilliseconds > 200)//认为两次包间隔大于200ms，上一包为完整的包
                           {
                               lastPacketTime = DateTime.Now;
-                              doAfterGetPacket(buffer, dateLen - receDataLen);
+                              if (dateLen == receDataLen)
+                              {
+                                  doAfterGetPacket(buffer, receDataLen);
+                                  dateLen = 0;
+                                  logger.Debug($"first data, full packet, packetlen: {receDataLen}");
+                              }
+                              else
+                              {
+                                  doAfterGetPacket(buffer, dateLen - receDataLen);
+                                  logger.Debug($"full packet, packetlen: {dateLen - receDataLen}");
+                                  dateLen = receDataLen;
+                              }
                               dateLen = receDataLen;
                           }
                           else
                           {
                               lastPacketTime = DateTime.Now;
-                              dateLen += receDataLen;
                           }
                       }
                   }, cts.Token);
@@ -80,7 +99,8 @@ namespace RTCMClient.helper
         {
             try
             {
-                cts.Cancel();
+                if (cts != null)
+                    cts.Cancel();
                 if (networkStream != null)
                     networkStream.Close();
                 if (tcpClient != null)
