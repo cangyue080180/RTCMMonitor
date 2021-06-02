@@ -78,9 +78,9 @@ namespace RTCMClient.helper
                               {
                                   doAfterGetPacket(buffer, dateLen - receDataLen);
                                   logger.Debug($"full packet, packetlen: {dateLen - receDataLen}");
+                                  Array.Copy(buffer,dateLen-receDataLen,buffer,0,receDataLen);
                                   dateLen = receDataLen;
                               }
-                              dateLen = receDataLen;
                           }
                           else
                           {

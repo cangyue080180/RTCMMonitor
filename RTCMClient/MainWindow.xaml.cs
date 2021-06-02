@@ -422,8 +422,8 @@ namespace RTCMClient
             {
                 lock (lockObject)
                 {
-                    Array.Copy(data, 0, globalDataBuffer, 0, dataLen);
-                    bufferDataLen = dataLen;
+                    Array.Copy(data, 0, globalDataBuffer, bufferDataLen, dataLen);
+                    bufferDataLen += dataLen;
                 }
                 //把从网络收到的差分数据转发给电台
                 //dianTai.SendData(data);
