@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.IO.Ports;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Windows;
 
 namespace RTCMClient
@@ -305,7 +306,7 @@ namespace RTCMClient
             Stop();
         }
 
-        private bool Start()
+        private async Task<bool> Start()
         {
             if (CheckInput())
             {
@@ -326,8 +327,12 @@ namespace RTCMClient
 
                 tcpClient = new TcpClientHelper(IpAddress, Port, (data, dataLen) => { DoWithNetMsg(data, dataLen); });
                 tcpClient.Start();
+                await Task.Delay(1000);
                 if (!tcpClient.IsConnet)
+                {
+                    MessageBox.Show("网络连接失败，请检查相关配置或者网络连接!", "发生错误", MessageBoxButton.OK, MessageBoxImage.Error);
                     return false;
+                }
 
                 return true;
             }
@@ -344,16 +349,19 @@ namespace RTCMClient
             //收到GGA数据马上转发网口收到的数据
             if (isUseNetChaFen)
             {
-                lock (lockObject)
+                if (bufferDataLen != 0)
                 {
-                    if (bufferDataLen >= 600)
+                    lock (lockObject)
                     {
-                        bufferDataLen = 0;
-                    }
-                    else
-                    {
-                        dianTai.SendData(globalDataBuffer, bufferDataLen);
-                        bufferDataLen = 0;
+                        if (bufferDataLen >= 600)
+                        {
+                            bufferDataLen = 0;
+                        }
+                        else
+                        {
+                            dianTai.SendData(globalDataBuffer, bufferDataLen);
+                            bufferDataLen = 0;
+                        }
                     }
                 }
             }
@@ -402,10 +410,10 @@ namespace RTCMClient
             }
         }
 
-        private byte[] globalDataBuffer = new byte[2000];//用于缓存网口收到的数据
+        private byte[] globalDataBuffer = new byte[2000];//用于缓存网口收到的上一个完整的数据包
         private int bufferDataLen = 0;
-        private bool isUseNetChaFen = false;
         private readonly object lockObject = new object();
+        private bool isUseNetChaFen = false;
 
         private void DoWithNetMsg(byte[] data, int dataLen)
         {
@@ -415,7 +423,7 @@ namespace RTCMClient
                 lock (lockObject)
                 {
                     Array.Copy(data, 0, globalDataBuffer, 0, dataLen);
-                    bufferDataLen += dataLen;
+                    bufferDataLen = dataLen;
                 }
                 //把从网络收到的差分数据转发给电台
                 //dianTai.SendData(data);
@@ -502,13 +510,13 @@ namespace RTCMClient
             logger.Info("保存化配置完成");
         }
 
-        private void StartBtn_Click(object sender, RoutedEventArgs e)
+        private async void StartBtn_Click(object sender, RoutedEventArgs e)
         {
             if (StartBtnContent == StartTag)
             {
                 this.StartBtn.IsEnabled = false;//因为网口连接需要等待，可能连接不成功，为了避免用户在连接等待期间多次点击先禁用
                 logger.Info("开始启动");
-                if (!Start())
+                if (!await Start())
                 {
                     this.StartBtn.IsEnabled = true;
                     Stop();
