@@ -314,7 +314,7 @@ namespace RTCMClient
 
                 tcpClient = new TcpClientHelper(IpAddress, Port, (data, dataLen) => { DoWithNetMsg(data, dataLen); });
                 tcpClient.Open();
-                await Task.Delay(1200);
+                await Task.Delay(1100);
                 if (!tcpClient.IsConnet)
                 {
                     MessageBox.Show("网络连接超时，请检查配置或物理连接。", "发送错误", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -353,7 +353,7 @@ namespace RTCMClient
                 {
                     lock (lockObject)
                     {
-                        if (bufferDataLen >= 600)
+                        if (bufferDataLen >= 700)
                         {
                             bufferDataLen = 0;
                         }
